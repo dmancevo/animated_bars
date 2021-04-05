@@ -4,6 +4,7 @@ import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib.animation import FuncAnimation
 import seaborn as sns
 import ssl
@@ -18,37 +19,58 @@ METRIC = "y"
 DATE_COL = "date"
 ELEMENT_COL = "elem"
 
-N = 100
+N = 400
 df = pd.concat([pd.DataFrame(dict(
-    y=np.random.uniform(0,1,N).cumsum(),
+    y=np.random.uniform(0,10,N).cumsum(),
     date=[date(2020,1,1)+timedelta(days=i) for i in range(N)],
-    elem=[e for _ in range(N)])) for e in ['a', 'b', 'c', 'd', 'e', 'f']])
+    elem=[e for _ in range(N)])) for e in ['a','b','c','d']])
 
 df.sort_values([DATE_COL, METRIC], inplace=True)
 min_date = df[DATE_COL].min()
 n_elements = df[ELEMENT_COL].nunique()
 
+IMAGES = [
+    plt.imread("https://www.libertygames.co.uk/images/desc/Sonic-Logo(3).jpg", format='jpeg')
+for _ in range(n_elements)]
+
 fig = plt.figure(figsize=(20,12))
 ax = plt.axes(
     xlim=(0, df[METRIC].max()),
-    ylim=(0, n_elements + 1),
+    ylim=(0, n_elements + 2.3),
     position=[0,.2,.9,.9],
 )
 ax.axis('off')
 bars = ax.barh(
-    y=[i+1 for i in range(n_elements)],
+    y=[0 for i in range(n_elements)],
     width=[1 for _ in range(n_elements)],
     color=sns.color_palette()[:n_elements],
     alpha=.7,
 )
+labels = [ax.text(
+    x=0, y=0, s="0", fontdict={
+        "fontfamily": "sans-serif",
+        "fontsize":"medium",
+    },
+) for _ in range(n_elements)]
+images = []
+for pic in IMAGES:
+    imagebox = OffsetImage(pic, zoom=0.5)
+    ab = AnnotationBbox(imagebox, (.5, .5), frameon=False)
+    ab.set_animated(True)
+    ax.add_artist(ab)
+    images.append(ab)
 def update(i):
     d = min_date + timedelta(days=i)
     _df = df[df[DATE_COL]==d]\
         .assign(Rank = lambda x: x[METRIC].rank())
-    for patch, t in zip(bars.patches, _df.iterrows()):
+    for t, patch, txt, ab in zip(_df.iterrows(), bars.patches, labels, images):
         _, row = t
         patch.set_width(row[METRIC])
         patch.set_y(row.Rank)
-    return bars.patches
-anim = FuncAnimation(fig, update, frames=100, interval=40, blit=True)
+        txt.set_text(f"{row[METRIC]:.2f}")
+        txt.set_x(row[METRIC])
+        txt.set_y(row.Rank)
+        ab.xybox=(row[METRIC]+2, row.Rank+.5)
+    return bars.patches + labels + images
+anim = FuncAnimation(fig, update, frames=N, interval=40, blit=True)
 anim.save('plot.mp4', writer='ffmpeg')
