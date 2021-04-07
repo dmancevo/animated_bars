@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from matplotlib.animation import FuncAnimation
 import seaborn as sns
+from numba import njit
 import ssl
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -23,35 +24,41 @@ THEME_IMAGE = plt.imread(("https://upload.wikimedia.org/wikipedia/"
                           "1280px-Olympic_rings_without_rims.svg.png"), format="png")
 
 ELEMENT_IMAGE_LOCATIONS = [plt.imread(("https://www.libertygames.co.uk/"
-                                       "images/desc/Sonic-Logo(3).jpg"), format="jpeg") for _ in range(7)]
+                                       "images/desc/Sonic-Logo(3).jpg"), format="jpeg") for _ in range(10)]
 
 # Data-set.
 METRIC = "y"
 DATE_COL = "date"
 NAME_COL = "elem"
-N = 100
+N = 400
 df = pd.concat([pd.DataFrame(dict(
-    y=np.random.uniform(0,10,N).cumsum(),
+    y=np.clip(5+np.random.normal(i*1e-1,1,N).cumsum(), 1, None),
     date=[date(2020,1,1)+timedelta(days=i) for i in range(N)],
-    elem=[e for _ in range(N)])) for e in ['sonic','diego','sam','frodo','gendry', 'player_1', 'player_2']])
+    elem=[e for _ in range(N)])) \
+        for i, e in enumerate(['sonic','diego','sam','frodo','gendry','p1','p2','p3','p4','p5'])])
+
+df['y'] = df.y.rolling(14).mean()
+df.dropna(inplace=True)
 
 df.sort_values([DATE_COL, METRIC], inplace=True)
 MIN_DATE = df[DATE_COL].min()
 N_ELEMENTS = df[NAME_COL].nunique()
+
+MAX_ELEMENTS = 7
 
 
 # Figure and axes.
 FIG = plt.figure(figsize=(20,12))
 MAIN_AX = FIG.add_subplot( # Use this axes for the bars.
     xlim=(0, df[METRIC].head(N_ELEMENTS * 100).max()),
-    ylim=(0, N_ELEMENTS + 2.3),
+    ylim=(0, MAX_ELEMENTS + 2.3),
     position=[.15,.2,.9,.9],
     frame_on=False,
 )
 LEFT_AX = FIG.add_subplot( # Use this axes for names/logos.
     position=[0,.2,.15,.9],
     frame_on=False,
-    ylim=(0, N_ELEMENTS + 2.3)
+    ylim=(0, MAX_ELEMENTS + 2.3)
 )
 BOTTOM_AX = FIG.add_subplot( # Use this axes for date and theme picture.
     position=[0,0,1,.2],
@@ -103,10 +110,24 @@ for i, name, bar_art, number_art, image_art \
     )
 
 # Animation.
-def get_rank(rank, m, m_below, m_above, per=.1):
-    if np.isnan(m_above) and (1-per) < (m_below/m):
-        alpha = (m_below - (1-per)*m) / (per*m)
+@njit
+def get_rank(
+    rank: float,
+    m: float,
+    m_below: float,
+    m_above: float,
+    per:float=.1,
+    max_elements:int=MAX_ELEMENTS,
+    ) -> float:
+    rank = rank - (N_ELEMENTS - MAX_ELEMENTS)
+    if ( np.isnan(m_above) and (1-per) < (m_below/m) ) \
+        or ( (m_below/m) >= (m/m_above) and (1-per) < (m_below/m) ):
+        alpha = np.round((m_below - (1-per)*m) / (per*m), 2)
         return (1-alpha) * rank + alpha * (rank-1)
+    elif ( np.isnan(m_below) and (1-per) < (m/m_above) ) \
+        or ( (m_below/m) < (m/m_above) and (1-per)*m_above < (m/m_above) ):
+        alpha = np.round((m - (1-per)*m_above) / (per*m_above), 2)
+        return (1-alpha) * (rank+1) + alpha * rank
     else:
         return rank
 
@@ -129,6 +150,7 @@ def update(i):
         name = row[NAME_COL]
         elem = ELEMENTS[name]
         rank = get_rank(row.Rank, row[METRIC], row.m_below, row.m_above)
+        if rank < .9: rank = -20 # Move out of the plot.
         elem.bar_art.set_width(row[METRIC])
         elem.bar_art.set_y(rank)
         elem.number_art.set_text(f"{row[METRIC]:.2f}")
@@ -138,5 +160,5 @@ def update(i):
         updated_artists += [elem.bar_art, elem.number_art, elem.image_art]
     return updated_artists
 
-anim = FuncAnimation(FIG, update, frames=N, interval=40, blit=True)
+anim = FuncAnimation(FIG, update, frames=N, interval=70, blit=True)
 anim.save('mov.mp4', writer='ffmpeg')
