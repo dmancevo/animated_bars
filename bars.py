@@ -29,7 +29,7 @@ ELEMENT_IMAGE_LOCATIONS = [plt.imread(("https://www.libertygames.co.uk/"
 METRIC = "y"
 DATE_COL = "date"
 NAME_COL = "elem"
-N = 400
+N = 100
 df = pd.concat([pd.DataFrame(dict(
     y=np.random.uniform(0,10,N).cumsum(),
     date=[date(2020,1,1)+timedelta(days=i) for i in range(N)],
@@ -103,10 +103,20 @@ for i, name, bar_art, number_art, image_art \
     )
 
 # Animation.
+def get_rank(rank, m, m_below, m_above, per=.1):
+    if np.isnan(m_above) and (1-per) < (m_below/m):
+        alpha = (m_below - (1-per)*m) / (per*m)
+        return (1-alpha) * rank + alpha * (rank-1)
+    else:
+        return rank
+
+
 def update(i):
     curr_date = MIN_DATE + timedelta(days=i)
     _df = df[df[DATE_COL]==curr_date]\
             .assign(Rank = lambda x: x[METRIC].rank()) 
+    _df['m_below'] = _df.y.shift(1)
+    _df['m_above'] = _df.y.shift(-1)
     # Adjust the x-axis to keep up with the growing numbers.
     a,b = MAIN_AX.get_xlim()
     m = _df[METRIC].max()
@@ -118,12 +128,13 @@ def update(i):
     for _, row in _df.iterrows():
         name = row[NAME_COL]
         elem = ELEMENTS[name]
+        rank = get_rank(row.Rank, row[METRIC], row.m_below, row.m_above)
         elem.bar_art.set_width(row[METRIC])
-        elem.bar_art.set_y(row.Rank)
+        elem.bar_art.set_y(rank)
         elem.number_art.set_text(f"{row[METRIC]:.2f}")
         elem.number_art.set_x(row[METRIC]*1.05)
-        elem.number_art.set_y(row.Rank + elem.bar_art.get_height()/2.5)
-        elem.image_art.xybox=(0.5, row.Rank + elem.bar_art.get_height()/2.5)
+        elem.number_art.set_y(rank + elem.bar_art.get_height()/2.5)
+        elem.image_art.xybox=(0.5, rank + elem.bar_art.get_height()/2.5)
         updated_artists += [elem.bar_art, elem.number_art, elem.image_art]
     return updated_artists
 
