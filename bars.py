@@ -30,7 +30,7 @@ ELEMENT_IMAGE_LOCATIONS = [plt.imread(("https://www.libertygames.co.uk/"
 METRIC = "y"
 DATE_COL = "date"
 NAME_COL = "elem"
-N = 400
+N = 200
 df = pd.concat([pd.DataFrame(dict(
     y=np.clip(5+np.random.normal(i*1e-1,1,N).cumsum(), 1, None),
     date=[date(2020,1,1)+timedelta(days=i) for i in range(N)],
@@ -93,20 +93,22 @@ NUMBERS_ART = [MAIN_AX.text(
     },
 ) for _ in range(N_ELEMENTS)]
 THEME_ART = add_image(BOTTOM_AX, THEME_IMAGE, zoom=0.32, xybox=(0.8, 0.7))
-IMAGE_ART = [add_image(LEFT_AX, img, zoom=0.5, xybox=(0, 0)) \
-            for img in ELEMENT_IMAGE_LOCATIONS]
+#ID_ART = [add_image(LEFT_AX, img, zoom=0.5, xybox=(0, 0)) \
+            #for img in ELEMENT_IMAGE_LOCATIONS]
+ID_ART = [LEFT_AX.text(x=0, y=0, s=name, fontdict={"fontfamily": "sans-serif", "fontsize":36}) \
+                for name in df[NAME_COL].unique()]
 
 # Elements.
-Element = namedtuple('Element', ['name', 'bar_art', 'bar_color', 'number_art', 'image_art'])
+Element = namedtuple('Element', ['name', 'bar_art', 'bar_color', 'number_art', 'id_art'])
 ELEMENTS = {}
-for i, name, bar_art, number_art, image_art \
-    in zip(range(N_ELEMENTS), df[NAME_COL].unique(), BARS_ART.patches, NUMBERS_ART, IMAGE_ART):
+for i, name, bar_art, number_art, id_art \
+    in zip(range(N_ELEMENTS), df[NAME_COL].unique(), BARS_ART.patches, NUMBERS_ART, ID_ART):
     ELEMENTS[name] = Element(
         name=name,
         bar_art=bar_art,
         bar_color=PALETTE[i % len(PALETTE)],
         number_art=number_art,
-        image_art=image_art
+        id_art=id_art
     )
 
 # Animation.
@@ -116,7 +118,7 @@ def get_rank(
     m: float,
     m_below: float,
     m_above: float,
-    per:float=.1,
+    per:float=.20,
     max_elements:int=MAX_ELEMENTS,
     ) -> float:
     rank = rank - (N_ELEMENTS - MAX_ELEMENTS)
@@ -154,11 +156,15 @@ def update(i):
         elem.bar_art.set_width(row[METRIC])
         elem.bar_art.set_y(rank)
         elem.number_art.set_text(f"{row[METRIC]:.2f}")
-        elem.number_art.set_x(row[METRIC]*1.05)
+        elem.number_art.set_x(row[METRIC]*1.07)
         elem.number_art.set_y(rank + elem.bar_art.get_height()/2.5)
-        elem.image_art.xybox=(0.5, rank + elem.bar_art.get_height()/2.5)
-        updated_artists += [elem.bar_art, elem.number_art, elem.image_art]
+        id_pos = (0.5, rank + elem.bar_art.get_height()/2.5 if rank > 0 else -20)
+        if hasattr(elem.id_art, 'xybox'):
+            elem.id_art.xybox=id_pos
+        else:
+            elem.id_art.set_position(xy=id_pos)
+        updated_artists += [elem.bar_art, elem.number_art, elem.id_art]
     return updated_artists
 
-anim = FuncAnimation(FIG, update, frames=N, interval=70, blit=True)
+anim = FuncAnimation(FIG, update, frames=N, interval=100, blit=True)
 anim.save('mov.mp4', writer='ffmpeg')
