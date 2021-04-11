@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import seaborn as sns
 import ssl
-import shutil
+from subprocess import run
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -48,7 +48,7 @@ def add_shares(df:pd.DataFrame, initial_amount:float, monthly_amount:float) -> p
     return pd.DataFrame(new_df).drop('date', axis=1)
 
 
-def get_update_f(df:pd.DataFrame, metric:str, timeframes:list[date],
+def get_update_f(df:pd.DataFrame, metric:str, show_total:bool, timeframes:list[date],
                     colors:list[tuple[float]]) -> Callable[[int], None]:
     df.sort_values(['Date', metric], inplace=True)
     def update(i):
@@ -62,10 +62,9 @@ def get_update_f(df:pd.DataFrame, metric:str, timeframes:list[date],
             color=[colors[t] for t in _df.Ticker.unique()],
             alpha=0.7,
         )
-        plt.title((
-            f"{date.fromisoformat(curr_date).strftime('%Y %b')}"
-            f"    Total Amount: ${_df.Value.sum():.2f}"
-            ), fontsize=50)
+        title = f"{date.fromisoformat(curr_date).strftime('%Y %b')}"
+        title += f"    Total Amount: ${_df.Value.sum():.2f}" if show_total else ""
+        plt.title(title, fontsize=50)
         ax = plt.gca()
         for spine in ax.spines.values():
             spine.set_visible(False)
@@ -82,27 +81,28 @@ def get_update_f(df:pd.DataFrame, metric:str, timeframes:list[date],
     return update
 
 
-def make_anim(df:pd.DataFrame, metric:str, file_name:str="mov.mp4", **kwargs):
+def make_anim(df:pd.DataFrame, metric:str, show_total:bool, file_name:str="mov.mp4", **kwargs):
     timeframes = df.Date.unique()
     tickers = df.Ticker.unique().tolist()
-    colors = {t:c for t,c in zip(tickers, sns.color_palette()[:len(tickers)])}
+    palette = sns.color_palette()
+    colors = {t:palette[(i%len(palette))] for i,t in enumerate(tickers)}
     fig = plt.figure(figsize=[20,12])
     anim = FuncAnimation(fig,
-        get_update_f(df=df, metric=metric, timeframes=timeframes,
+        get_update_f(df=df, metric=metric, show_total=show_total, timeframes=timeframes,
                         colors=colors, **kwargs),
         interval=200, frames=len(timeframes), repeat=False
     )
     anim.save(file_name, writer='ffmpeg')
-    shutil.move(file_name, "/Users/dmancevo/Downloads/mov.mp4")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("stonks", type=lambda s: [x.strip() for x in s.split(',')])
-    parser.add_argument("--start_date", "-s", default=f"{date.today() - timedelta(days=365)}")
+    parser.add_argument("--start_date", "-s", default=f"{date.today() - timedelta(days=5*365)}")
     parser.add_argument("--end_date", "-e", default=f"{date.today()}")
     parser.add_argument("--initial_amount", "-a", type=float, default=0.)
     parser.add_argument("--monthly_amount", "-m", type=float, default=100.)
+    parser.add_argument("--show_total", "-t", action="store_true", default=False)
     args = parser.parse_args()
     df = (
         get_df(**dict(args._get_kwargs()))
@@ -117,4 +117,5 @@ if __name__ == "__main__":
     df.sort_values("Date", inplace=True)
     df = add_shares(df, args.initial_amount, args.monthly_amount)
     df['Value'] = df.Shares * df.Close
-    make_anim(df, 'Value')
+    make_anim(df, 'Value', args.show_total)
+    run("bash add_music_and_export.sh", shell=True, capture_output=True, check=True)
