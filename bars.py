@@ -32,6 +32,22 @@ def get_df(stonks:list[str], start_date:str, end_date:str=None, **kwargs) -> pd.
         for stonk in stonks])
 
 
+def add_shares(df:pd.DataFrame, initial_amount:float, monthly_amount:float) -> pd.DataFrame:
+    shares = {}
+    invested = set([])
+    new_df = []
+    for i,row in df.assign(date=lambda x: pd.to_datetime(x.Date)).iterrows():
+        K = (row.Ticker, row.date.year, row.date.month)
+        if row.Ticker not in shares:
+            shares[row.Ticker] = initial_amount/row.Close
+        if K not in invested:
+            shares[row.Ticker] += monthly_amount/row.Close
+            invested.add(K)
+        row['Shares'] = shares[row.Ticker]
+        new_df.append(row)
+    return pd.DataFrame(new_df).drop('date', axis=1)
+
+
 def get_update_f(df:pd.DataFrame, metric:str, timeframes:list[date],
                     colors:list[tuple[float]]) -> Callable[[int], None]:
     df.sort_values(['Date', metric], inplace=True)
@@ -41,18 +57,27 @@ def get_update_f(df:pd.DataFrame, metric:str, timeframes:list[date],
         _df = df[df.Date == curr_date]
         _df.assign(Rank = lambda x: x[metric].rank()).sort_values('Rank')
         plt.cla()
-        bars = plt.barh(_df.Ticker, _df[metric],
-                    color=[colors[t] for t in _df.Ticker.unique()])
-        plt.title(f"{date.fromisoformat(curr_date).strftime('%Y %b')}", fontsize=32)
+        bars = plt.barh(
+            _df.Ticker, _df[metric],
+            color=[colors[t] for t in _df.Ticker.unique()],
+            alpha=0.7,
+        )
+        plt.title((
+            f"{date.fromisoformat(curr_date).strftime('%Y %b')}"
+            f"    Total Amount: ${_df.Value.sum():.2f}"
+            ), fontsize=50)
         ax = plt.gca()
         for spine in ax.spines.values():
             spine.set_visible(False)
+        for l in ax.get_yticklabels():
+            l.set_fontsize(40)
         plt.tick_params(left=False, bottom=False, labelbottom=False)
         for bar in bars:
             ax.text(
                 bar.get_width(),
                 bar.get_y() + bar.get_height()/2,
-                f"  ${bar.get_width():.0f}", va='center'
+                f"  ${bar.get_width():.0f}", va='center',
+                fontsize=40,
             )
     return update
 
@@ -76,7 +101,8 @@ if __name__ == "__main__":
     parser.add_argument("stonks", type=lambda s: [x.strip() for x in s.split(',')])
     parser.add_argument("--start_date", "-s", default=f"{date.today() - timedelta(days=365)}")
     parser.add_argument("--end_date", "-e", default=f"{date.today()}")
-    parser.add_argument("--investment_amount", "-a", type=float, default=1000.)
+    parser.add_argument("--initial_amount", "-a", type=float, default=0.)
+    parser.add_argument("--monthly_amount", "-m", type=float, default=100.)
     args = parser.parse_args()
     df = (
         get_df(**dict(args._get_kwargs()))
@@ -88,10 +114,7 @@ if __name__ == "__main__":
         .reset_index()
         .dropna()
     )
-    df = pd.merge(df,
-        (args.investment_amount/df[df.Date==df.Date.min()]\
-            .groupby('Ticker').Close.sum().rename('Shares')),
-        on='Ticker',
-    )
+    df.sort_values("Date", inplace=True)
+    df = add_shares(df, args.initial_amount, args.monthly_amount)
     df['Value'] = df.Shares * df.Close
     make_anim(df, 'Value')
