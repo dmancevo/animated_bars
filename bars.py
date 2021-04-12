@@ -3,8 +3,12 @@ import argparse
 from datetime import datetime, date, timedelta
 import numpy as np
 import pandas as pd
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from PIL import Image
+from matplotlib.offsetbox import OffsetImage
+from matplotlib.offsetbox import AnnotationBbox
 import seaborn as sns
 import ssl
 from subprocess import run
@@ -46,6 +50,21 @@ def add_shares(df:pd.DataFrame, initial_amount:float, monthly_amount:float) -> p
         row['Shares'] = shares[row.Ticker]
         new_df.append(row)
     return pd.DataFrame(new_df).drop('date', axis=1)
+
+
+def add_image(
+        ax:matplotlib.axes.Axes,
+        ticker:str, zoom:float, xy:tuple[float,float], xybox:tuple[float,float]
+    ) -> matplotlib.offsetbox.AnnotationBbox:
+    try:
+        image = np.array( Image.open(f"ticker_images/{ticker}.png") )
+    except FileNotFoundError:
+        return None
+    imagebox = OffsetImage(image, zoom=zoom)
+    ab = AnnotationBbox(imagebox, xy=(.5, .5), xybox=xybox, frameon=False)
+    ab.set_animated(True)
+    ax.add_artist(ab)
+    return ab
 
 
 def get_update_f(df:pd.DataFrame, metric:str, show_total:bool, timeframes:list[date],
