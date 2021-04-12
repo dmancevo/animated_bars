@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-from PIL import Image
 from matplotlib.offsetbox import OffsetImage
 from matplotlib.offsetbox import AnnotationBbox
 import seaborn as sns
@@ -54,17 +53,27 @@ def add_shares(df:pd.DataFrame, initial_amount:float, monthly_amount:float) -> p
 
 def add_image(
         ax:matplotlib.axes.Axes,
-        ticker:str, zoom:float, xy:tuple[float,float], xybox:tuple[float,float]
+        ticker:str, zoom:float, xybox:tuple[float,float]
     ) -> matplotlib.offsetbox.AnnotationBbox:
     try:
-        image = np.array( Image.open(f"ticker_images/{ticker}.png") )
+        image = plt.imread(f"ticker_images/{ticker}.png")
     except FileNotFoundError:
+        print(f"No ticker image found: {ticker}")
         return None
     imagebox = OffsetImage(image, zoom=zoom)
-    ab = AnnotationBbox(imagebox, xy=(.5, .5), xybox=xybox, frameon=False)
+    ab = AnnotationBbox(imagebox, xy=(.5,.5), xybox=xybox, frameon=False)
     ab.set_animated(True)
     ax.add_artist(ab)
     return ab
+
+
+def add_image_to_xlabel(ticker:str, bar:matplotlib.patches.Rectangle) -> None:
+    add_image(
+        plt.gca(),
+        ticker,
+        1,
+        (1.07*bar.get_width(), bar.get_y() + .6*bar.get_height())
+    )
 
 
 def get_update_f(df:pd.DataFrame, metric:str, show_total:bool, timeframes:list[date],
@@ -90,10 +99,11 @@ def get_update_f(df:pd.DataFrame, metric:str, show_total:bool, timeframes:list[d
         for l in ax.get_yticklabels():
             l.set_fontsize(40)
         plt.tick_params(left=False, bottom=False, labelbottom=False)
-        for bar in bars:
+        for ticker,bar in zip(_df.Ticker.tolist(), bars):
+            add_image_to_xlabel(ticker, bar)
             ax.text(
                 bar.get_width(),
-                bar.get_y() + bar.get_height()/2,
+                bar.get_y() + .2 * bar.get_height(),
                 f"  ${bar.get_width():.0f}", va='center',
                 fontsize=40,
             )
