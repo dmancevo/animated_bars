@@ -58,7 +58,6 @@ def add_image(
     try:
         image = plt.imread(f"ticker_images/{ticker}.png")
     except FileNotFoundError:
-        print(f"No ticker image found: {ticker}")
         return None
     imagebox = OffsetImage(image, zoom=zoom)
     ab = AnnotationBbox(imagebox, xy=(.5,.5), xybox=xybox, frameon=False)
@@ -67,12 +66,12 @@ def add_image(
     return ab
 
 
-def add_image_to_xlabel(ticker:str, bar:matplotlib.patches.Rectangle) -> None:
+def add_image_to_xlabel(ticker:str, width:float, bar:matplotlib.patches.Rectangle) -> None:
     add_image(
         plt.gca(),
         ticker,
         1,
-        (1.07*bar.get_width(), bar.get_y() + .6*bar.get_height())
+        (bar.get_width() + .07*width, bar.get_y() + .8*bar.get_height())
     )
 
 
@@ -99,8 +98,9 @@ def get_update_f(df:pd.DataFrame, metric:str, show_total:bool, timeframes:list[d
         for l in ax.get_yticklabels():
             l.set_fontsize(40)
         plt.tick_params(left=False, bottom=False, labelbottom=False)
+        width=max([bar.get_width() for bar in bars])
         for ticker,bar in zip(_df.Ticker.tolist(), bars):
-            add_image_to_xlabel(ticker, bar)
+            add_image_to_xlabel(ticker, width, bar)
             ax.text(
                 bar.get_width(),
                 bar.get_y() + .2 * bar.get_height(),
@@ -127,10 +127,10 @@ def make_anim(df:pd.DataFrame, metric:str, show_total:bool, file_name:str="mov.m
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("stonks", type=lambda s: [x.strip() for x in s.split(',')])
-    parser.add_argument("--start_date", "-s", default=f"{date.today() - timedelta(days=5*365)}")
+    parser.add_argument("--start_date", "-s", default=f"{date.today() - timedelta(days=10*365)}")
     parser.add_argument("--end_date", "-e", default=f"{date.today()}")
-    parser.add_argument("--initial_amount", "-a", type=float, default=0.)
-    parser.add_argument("--monthly_amount", "-m", type=float, default=100.)
+    parser.add_argument("--initial_amount", "-a", type=float, default=1000.)
+    parser.add_argument("--monthly_amount", "-m", type=float, default=0.)
     parser.add_argument("--show_total", "-t", action="store_true", default=False)
     args = parser.parse_args()
     df = (
