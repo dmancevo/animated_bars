@@ -70,7 +70,7 @@ def add_image_to_xlabel(ticker:str, width:float, bar:matplotlib.patches.Rectangl
     add_image(
         plt.gca(),
         ticker,
-        1,
+        .8,
         (bar.get_width() + .07*width, bar.get_y() + .8*bar.get_height())
     )
 
