@@ -97,4 +97,4 @@ def make_anim(bars:list[tuple[list[str],list[float]]], file_name:str="mov.mp4", 
     )
     anim.save(file_name, writer='ffmpeg')
     
-make_anim(get_bars(df, 1960, 2018))
+make_anim(get_bars(df, 2010, 2020))
