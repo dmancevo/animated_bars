@@ -30,11 +30,11 @@ def get_bars(df:pd.DataFrame, start_year=1960, end_year=2019) -> list[tuple[list
                 break
         df[f"{year+1}"].fillna(df[f"{year}"], inplace=True)
         for alpha in np.arange(0,1.05,.05):
-            df['CO2 emissions (kt)'] = (1-alpha) * df[f"{year}"] + alpha * df[f"{year+1}"]
-            df.sort_values('CO2 emissions (kt)', ascending=False, inplace=True)
+            df['CO2 emissions (kg) per capita'] = (1-alpha) * df[f"{year}"] + alpha * df[f"{year+1}"]
+            df.sort_values('CO2 emissions (kg) per capita', ascending=False, inplace=True)
             bars.append((year if alpha < 1 else year+1,
                          df['Country Name'].head(20).tolist(),
-                         df['CO2 emissions (kt)'].head(20).tolist()))
+                         df['CO2 emissions (kg) per capita'].head(20).tolist()))
     return bars
 
 
@@ -69,7 +69,7 @@ def get_update(
                 colors[c] = palette[np.random.choice(len(palette))]
             col.append(colors[c])
         barC = plt.barh(np.arange(len(countries), 0, -1), values, tick_label=countries, color=col)
-        plt.title(f"CO2 Emissions (kt) Year: {year}", fontsize=50)
+        plt.title(f"CO2 Emissions (kg) per capita Year: {year}", fontsize=50)
         ax = plt.gca()
         for spine in ax.spines.values():
             spine.set_visible(False)
@@ -103,7 +103,16 @@ def make_anim(bars:list[tuple[list[str],list[float]]], file_name:str="mov.mp4", 
     anim.save(file_name, writer='ffmpeg')
 
 if __name__ == "__main__":
-    df = pd.read_csv("API_EN.ATM.CO2E.KT_DS2_en_csv_v2_2163797.csv", skiprows=4)
+    df = pd.merge(
+        pd.read_csv("datasets/co2.csv", skiprows=4),
+        pd.read_csv("datasets/pop.csv", skiprows=4),
+        on="Country Name",
+        suffixes=("", "_y"),
+    )
+    for year in range(1960, 2020):
+        if f"{year}" not in df.columns:
+            continue
+        df[f"{year}"] = 1000000 *  (df[f"{year}"] / df[f"{year}_y"])
     for x in [
         "World",
         "IDA & IBRD total",
@@ -140,6 +149,7 @@ if __name__ == "__main__":
         .apply(lambda s: "Iran" if s=="Iran, Islamic Rep." \
                                  else "South Korea" if s=="Korea, Rep." \
                                  else "North Korea" if s=="Korea, Dem. People’s Rep." \
+                                 else "Sint Maarten (Dutch part)" if s=="Sint Maarten" \
                                  else s)
     make_anim(get_bars(df, 1960, 2020))
     run("bash add_music_and_export.sh", shell=True, capture_output=True, check=True)
